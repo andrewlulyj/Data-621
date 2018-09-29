@@ -1,0 +1,128 @@
+---
+title: "Assignment1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(mice)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+## Load Data
+```{r cars}
+file1 <-'C:/Users/andre/Downloads/moneyball-evaluation-data.csv'
+eval<-read.csv(file1)
+file2 <-'C:/Users/andre/Downloads/moneyball-training-data.csv'
+train<-read.csv(file2)
+summary(train)
+```
+
+
+
+## Find Outlier
+
+```{r pressure, echo=FALSE}
+ggplot(stack(train), aes(x = ind, y = values)) + geom_boxplot() + coord_cartesian(ylim = c(0, 2000)) +
+  theme(legend.position="none") +
+  theme(axis.text.x=element_text(angle=45, hjust=1)) + 
+  theme(panel.background = element_rect(fill = 'grey'))
+```
+## Remove TEAM_BATTING_HBP since it has mostly missing values
+```{r}
+train <- train[,-1 ]
+train <- train[, -10]
+```
+
+
+## Find correlations
+```{r}
+cor(drop_na(train))
+```
+
+TEAM_PITCHING_HR/BB and TEAM_BATTING_HR/BB are highly correlated, so we can remove one of them.
+
+```{r}
+train <- train[, -11]
+train<-train[,-11]
+
+train
+```
+
+
+```{r}
+refin_data <- mice(train, m=5, maxit = 5, method = 'pmm')
+refin_data <- complete(refin_data)
+
+```
+```{r}
+
+model1 <- lm(TARGET_WINS ~., refin_data)
+summary(model1)
+
+```
+
+```{r}
+model2 <- lm(TARGET_WINS ~ TEAM_BATTING_H + TEAM_BATTING_HR + TEAM_BATTING_SO + TEAM_BASERUN_SB + TEAM_PITCHING_H + TEAM_FIELDING_E + TEAM_FIELDING_DP , refin_data)
+summary(model2) 
+plot(fitted(model2),residuals(model2),xlab = "Fitted", ylab = "Residuals")
+abline(h=0)
+par(mfrow = c(1,1))
+qqnorm(residuals(model2),ylab = "Residuals")
+qqline(residuals(model2))
+```
+## transfrom data
+```{r}
+library(caret)
+library(e1071)
+t = preProcess(refin_data, 
+                   c("BoxCox", "center", "scale"))
+refin_data = data.frame(
+      t = predict(t, refin_data))
+```
+## m3
+```{r}
+model3 <- lm(t.TARGET_WINS ~ t.TEAM_BATTING_H + t.TEAM_BATTING_HR + t.TEAM_BATTING_SO + t.TEAM_BASERUN_SB + t.TEAM_PITCHING_H + t.TEAM_FIELDING_E + t.TEAM_FIELDING_DP , refin_data)
+summary(model3) 
+plot(fitted(model3),residuals(model3),xlab = "Fitted", ylab = "Residuals")
+abline(h=0)
+par(mfrow = c(1,1))
+qqnorm(residuals(model3),ylab = "Residuals")
+qqline(residuals(model3))
+```
+
+```{r}
+eval <- eval[,-1 ]
+eval <- eval[, -9]
+eval<-eval[,-10]
+eval<-eval[,-10]
+```
+
+```{r}
+refin_val <- mice(eval, m=5, maxit = 5, method = 'pmm')
+refin_val <- complete(refin_val)
+```
+```{r}
+t = preProcess(refin_val, 
+                   c("BoxCox", "center", "scale"))
+refin_val = data.frame(
+      t = predict(t, refin_val))
+```
+
+```{r}
+eval_data <- predict(model2, newdata = refin_val, interval="prediction")
+summary(eval_data)
+```
+
+
+```{r}
+eval_data
+```
